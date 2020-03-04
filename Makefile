@@ -49,12 +49,13 @@ endif
 
 
 # General flags
+TARGET_PLATFORM ?= $(shell $(CC) -dumpmachine)
 CPPFLAGS  ?=
-PICFLAG   ?= -fPIC
+PICFLAG   ?=  $(if $(filter-out %windows-msvc, $(TARGET_PLATFORM)), -fPIC,)
 CFLAGS    += $(CFLAGS_$(variant)) -std=c99 $(PICFLAG) -DHAVE_FIRM_REVISION_H
 CFLAGS    += -Wall -W -Wextra -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings
 
-TARGET_PLATFORM ?= $(shell $(CC) $(CFLAGS) -dumpmachine)
+
 
 LINKFLAGS += $(LINKFLAGS_$(variant))
 
