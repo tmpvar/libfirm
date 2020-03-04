@@ -47,14 +47,24 @@ ifeq ($(findstring -DNDEBUG, $(CFLAGS_$(variant))),)
 CFLAGS += -DDEBUG_libfirm
 endif
 
+
 # General flags
 CPPFLAGS  ?=
 PICFLAG   ?= -fPIC
 CFLAGS    += $(CFLAGS_$(variant)) -std=c99 $(PICFLAG) -DHAVE_FIRM_REVISION_H
 CFLAGS    += -Wall -W -Wextra -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings
-LINKFLAGS += $(LINKFLAGS_$(variant)) -lm
-LINKFLAGS += $(if $(filter %cygwin %mingw32, $(shell $(CC) $(CFLAGS) -dumpmachine)), -lregex -lwinmm,)
+
+TARGET_PLATFORM ?= $(shell $(CC) $(CFLAGS) -dumpmachine)
+
+LINKFLAGS += $(LINKFLAGS_$(variant))
+
+# for all non clang on windows builds, link against math
+LINKFLAGS += $(if $(filter-out %windows-msvc, $(TARGET_PLATFORM)), -lm,)
+LINKFLAGS += $(if $(filter %cygwin %mingw32, $(TARGET_PLATFORM)), -lregex -lwinmm,)
+# NOTE(tmpvar): no need to link with the regex library as it comes from visual studio
+LINKFLAGS += $(if $(filter %windows-msvc, $(TARGET_PLATFORM)), -lwinmm,)
 VPATH = $(srcdir) $(gendir)
+
 
 all: firm
 .PHONY: all
@@ -68,6 +78,12 @@ libfirm_GEN_SOURCES =
 libfirm_DIRS        = $(sort $(dir $(libfirm_SOURCES))) include/libfirm include/libfirm/adt
 libfirm_GEN_DIRS    = $(sort $(dir $(libfirm_GEN_SOURCES)))
 libfirm_INCLUDEDIRS = $(addprefix $(srcdir)/, $(libfirm_DIRS)) $(addprefix $(gendir)/, $(libfirm_GEN_DIRS))
+
+# clang+win32 specific includes & sources
+libfirm_INCLUDEDIRS += $(if $(filter %windows-msvc, $(TARGET_PLATFORM)), $(srcdir)/support/win32,)
+libfirm_SOURCES     += $(if $(filter %windows-msvc, $(TARGET_PLATFORM)), $(subst $(srcdir)/,,$(wildcard $(srcdir)/support/win32/regex/*.c)), )
+
+
 libfirm_a           = $(builddir)/libfirm.a
 libfirm_dll         = $(builddir)/libfirm$(DLLEXT)
 libfirm_CPPFLAGS    = $(foreach dir,$(libfirm_INCLUDEDIRS),-I$(dir))
@@ -209,7 +225,7 @@ UNITTESTS_OK      = $(UNITTESTS_SOURCES:%.c=$(builddir)/%.ok)
 
 $(builddir)/%.exe: $(srcdir)/unittests/%.c $(libfirm_a)
 	@echo LINK $<
-	$(Q)$(LINK) $(CFLAGS) $(CPPFLAGS) $(libfirm_CPPFLAGS) "$<" $(libfirm_a) -lm -o "$@"
+	$(Q)$(LINK) $(CFLAGS) $(CPPFLAGS) $(libfirm_CPPFLAGS) "$<" $(libfirm_a) $(LINKFLAGS) -o "$@"
 
 $(builddir)/%.ok: $(builddir)/%.exe
 	@echo EXEC $<
